@@ -2,64 +2,49 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"net"
+	"github.com/gorilla/websocket"
 	"net/http"
-	"time"
-
-	"golang.org/x/net/websocket"
 )
 
-func main() {
-	http.Handle("/ws", websocket.Handler(handleConnection))
-	log.Println("WebSocket server started on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true // Allow all origins
+	},
 }
 
-func handleConnection(ws *websocket.Conn) {
-	defer func() {
-		ws.Close()
-		log.Printf("[%s] Connection closed", getClientInfo(ws))
-	}()
-
-	clientIP := getClientIP(ws.Request())
-	log.Printf("[%s] New connection attempt | Origin: %s | Protocol: %s",
-		clientIP,
-		ws.Request().Header.Get("Origin"),
-		ws.Request().Proto,
-	)
-
-	var msg string
-	err := websocket.Message.Receive(ws, &msg)
+func handleConnection(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("[%s] Connection error: %v", clientIP, err)
+		fmt.Println("Error upgrading connection:", err)
 		return
 	}
+	defer conn.Close()
+	fmt.Println("Client connected!")
 
-	log.Printf("[%s] Successfully upgraded to WebSocket", clientIP)
-	log.Printf("[%s] Received message: %s", clientIP, msg)
+	for {
+		// Read message from client
+		messageType, msg, err := conn.ReadMessage()
+		if err != nil {
+			fmt.Println("Read error:", err)
+			break
+		}
 
-	// Обработка сообщения
-	if msg == "Hello, backend" {
-		websocket.Message.Send(ws, "Hello from Go server!")
-		log.Printf("[%s] Sent response", clientIP)
-	} else {
-		websocket.Message.Send(ws, "Unknown request")
-		log.Printf("[%s] Invalid request received: %s", clientIP, msg)
+		fmt.Println("Received:", string(msg))
+
+		// Echo the message back to the client
+		err = conn.WriteMessage(messageType, msg)
+		if err != nil {
+			fmt.Println("Write error:", err)
+			break
+		}
 	}
 }
 
-func getClientIP(r *http.Request) string {
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+func main() {
+	http.HandleFunc("/ws", handleConnection)
+	fmt.Println("Server started on :8080")
+	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
-		return "unknown"
+		fmt.Println("Server error:", err)
 	}
-	return ip
-}
-
-func getClientInfo(ws *websocket.Conn) string {
-	return fmt.Sprintf("%s | %s",
-		getClientIP(ws.Request()),
-		time.Now().Format("2006-01-02 15:04:05"),
-	)
 }
