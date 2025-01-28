@@ -19,7 +19,7 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
-	fmt.Println("Client connected!")
+	fmt.Println("Client connected! IP: " + conn.RemoteAddr().String())
 
 	for {
 		// Read message from client
@@ -29,7 +29,7 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		fmt.Println("Received:", string(msg))
+		fmt.Println("Received: \""+string(msg)+"\" with type:", messageType)
 
 		// Echo the message back to the client
 		err = conn.WriteMessage(messageType, msg)
